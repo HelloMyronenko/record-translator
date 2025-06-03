@@ -1,8 +1,5 @@
 import { TranscriptionSegment } from '../types'
 
-const PROXY_URL = 'undefined'
-const PROXY_TOKEN = import.meta.env.VITE_PROXY_SERVER_ACCESS_TOKEN
-
 export class TranslationService {
   // Using Web Speech API for speech recognition (browser built-in)
   private recognition: SpeechRecognition | null = null
@@ -79,72 +76,172 @@ export class TranslationService {
       return text
     }
 
-    try {
-      // Using LibreTranslate API (free tier available)
-      const response = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${PROXY_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: 'https://libretranslate.com/translate',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: {
-            q: text,
-            source: this.getLibreTranslateCode(sourceLanguage),
-            target: this.getLibreTranslateCode(targetLanguage),
-            format: 'text'
-          }
-        })
-      })
-
-      if (!response.ok) {
-        // Fallback to MyMemory Translation API
-        return await this.translateWithMyMemory(text, sourceLanguage, targetLanguage)
-      }
-
-      const data = await response.json()
-      return data.translatedText || text
-    } catch (error) {
-      console.error('Translation error:', error)
-      // Fallback to MyMemory Translation API
-      return await this.translateWithMyMemory(text, sourceLanguage, targetLanguage)
-    }
+    // Use enhanced dictionary-based translation
+    return this.enhancedDictionaryTranslate(text, sourceLanguage, targetLanguage)
   }
 
-  private async translateWithMyMemory(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
-    try {
-      const langPair = `${sourceLanguage}|${targetLanguage}`
-      const encodedText = encodeURIComponent(text)
+  private enhancedDictionaryTranslate(text: string, sourceLanguage: string, targetLanguage: string): string {
+    // Expanded dictionary with more phrases and words
+    const dictionary: Record<string, Record<string, string>> = {
+      // Greetings
+      'hello': {
+        'es': 'hola', 'fr': 'bonjour', 'de': 'hallo', 'it': 'ciao', 'pt': 'olá',
+        'ru': 'привет', 'zh': '你好', 'ja': 'こんにちは', 'ko': '안녕하세요',
+        'ar': 'مرحبا', 'hi': 'नमस्ते', 'nl': 'hallo', 'pl': 'cześć', 'tr': 'merhaba'
+      },
+      'good morning': {
+        'es': 'buenos días', 'fr': 'bonjour', 'de': 'guten Morgen', 'it': 'buongiorno',
+        'pt': 'bom dia', 'ru': 'доброе утро', 'zh': '早上好', 'ja': 'おはよう',
+        'ko': '좋은 아침', 'ar': 'صباح الخير', 'hi': 'सुप्रभात', 'nl': 'goedemorgen',
+        'pl': 'dzień dobry', 'tr': 'günaydın'
+      },
+      'good night': {
+        'es': 'buenas noches', 'fr': 'bonne nuit', 'de': 'gute Nacht', 'it': 'buonanotte',
+        'pt': 'boa noite', 'ru': 'спокойной ночи', 'zh': '晚安', 'ja': 'おやすみ',
+        'ko': '잘자요', 'ar': 'تصبح على خير', 'hi': 'शुभ रात्रि', 'nl': 'goedenacht',
+        'pl': 'dobranoc', 'tr': 'iyi geceler'
+      },
+      'goodbye': {
+        'es': 'adiós', 'fr': 'au revoir', 'de': 'auf wiedersehen', 'it': 'arrivederci',
+        'pt': 'adeus', 'ru': 'до свидания', 'zh': '再见', 'ja': 'さようなら',
+        'ko': '안녕히 가세요', 'ar': 'وداعا', 'hi': 'अलविदा', 'nl': 'tot ziens',
+        'pl': 'do widzenia', 'tr': 'hoşça kal'
+      },
       
-      const response = await fetch(PROXY_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${PROXY_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${langPair}`,
-          method: 'GET',
-          headers: {},
-          body: {}
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Translation failed')
+      // Common phrases
+      'thank you': {
+        'es': 'gracias', 'fr': 'merci', 'de': 'danke', 'it': 'grazie', 'pt': 'obrigado',
+        'ru': 'спасибо', 'zh': '谢谢', 'ja': 'ありがとう', 'ko': '감사합니다',
+        'ar': 'شكرا', 'hi': 'धन्यवाद', 'nl': 'dank je', 'pl': 'dziękuję', 'tr': 'teşekkür ederim'
+      },
+      'please': {
+        'es': 'por favor', 'fr': 's\'il vous plaît', 'de': 'bitte', 'it': 'per favore',
+        'pt': 'por favor', 'ru': 'пожалуйста', 'zh': '请', 'ja': 'お願いします',
+        'ko': '제발', 'ar': 'من فضلك', 'hi': 'कृपया', 'nl': 'alsjeblieft',
+        'pl': 'proszę', 'tr': 'lütfen'
+      },
+      'sorry': {
+        'es': 'lo siento', 'fr': 'désolé', 'de': 'entschuldigung', 'it': 'scusa',
+        'pt': 'desculpe', 'ru': 'извините', 'zh': '对不起', 'ja': 'ごめんなさい',
+        'ko': '죄송합니다', 'ar': 'آسف', 'hi': 'माफ़ करें', 'nl': 'sorry',
+        'pl': 'przepraszam', 'tr': 'özür dilerim'
+      },
+      'excuse me': {
+        'es': 'disculpe', 'fr': 'excusez-moi', 'de': 'entschuldigung', 'it': 'mi scusi',
+        'pt': 'com licença', 'ru': 'извините', 'zh': '打扰一下', 'ja': 'すみません',
+        'ko': '실례합니다', 'ar': 'عفوا', 'hi': 'माफ कीजिए', 'nl': 'pardon',
+        'pl': 'przepraszam', 'tr': 'pardon'
+      },
+      'yes': {
+        'es': 'sí', 'fr': 'oui', 'de': 'ja', 'it': 'sì', 'pt': 'sim',
+        'ru': 'да', 'zh': '是', 'ja': 'はい', 'ko': '네', 'ar': 'نعم',
+        'hi': 'हाँ', 'nl': 'ja', 'pl': 'tak', 'tr': 'evet'
+      },
+      'no': {
+        'es': 'no', 'fr': 'non', 'de': 'nein', 'it': 'no', 'pt': 'não',
+        'ru': 'нет', 'zh': '不', 'ja': 'いいえ', 'ko': '아니요', 'ar': 'لا',
+        'hi': 'नहीं', 'nl': 'nee', 'pl': 'nie', 'tr': 'hayır'
+      },
+      
+      // Questions
+      'how are you': {
+        'es': '¿cómo estás?', 'fr': 'comment allez-vous?', 'de': 'wie geht es dir?',
+        'it': 'come stai?', 'pt': 'como está?', 'ru': 'как дела?', 'zh': '你好吗？',
+        'ja': '元気ですか？', 'ko': '어떻게 지내세요?', 'ar': 'كيف حالك؟',
+        'hi': 'आप कैसे हैं?', 'nl': 'hoe gaat het?', 'pl': 'jak się masz?', 'tr': 'nasılsın?'
+      },
+      'what is your name': {
+        'es': '¿cómo te llamas?', 'fr': 'comment vous appelez-vous?', 'de': 'wie heißt du?',
+        'it': 'come ti chiami?', 'pt': 'qual é o seu nome?', 'ru': 'как тебя зовут?',
+        'zh': '你叫什么名字？', 'ja': 'お名前は？', 'ko': '이름이 뭐예요?',
+        'ar': 'ما اسمك؟', 'hi': 'आपका नाम क्या है?', 'nl': 'hoe heet je?',
+        'pl': 'jak masz na imię?', 'tr': 'adın ne?'
+      },
+      'where are you from': {
+        'es': '¿de dónde eres?', 'fr': 'd\'où venez-vous?', 'de': 'woher kommst du?',
+        'it': 'di dove sei?', 'pt': 'de onde você é?', 'ru': 'откуда ты?',
+        'zh': '你从哪里来？', 'ja': 'どこから来ましたか？', 'ko': '어디서 왔어요?',
+        'ar': 'من أين أنت؟', 'hi': 'आप कहाँ से हैं?', 'nl': 'waar kom je vandaan?',
+        'pl': 'skąd jesteś?', 'tr': 'nerelisin?'
+      },
+      
+      // Numbers
+      'one': {
+        'es': 'uno', 'fr': 'un', 'de': 'eins', 'it': 'uno', 'pt': 'um',
+        'ru': 'один', 'zh': '一', 'ja': '一', 'ko': '하나', 'ar': 'واحد',
+        'hi': 'एक', 'nl': 'een', 'pl': 'jeden', 'tr': 'bir'
+      },
+      'two': {
+        'es': 'dos', 'fr': 'deux', 'de': 'zwei', 'it': 'due', 'pt': 'dois',
+        'ru': 'два', 'zh': '二', 'ja': '二', 'ko': '둘', 'ar': 'اثنان',
+        'hi': 'दो', 'nl': 'twee', 'pl': 'dwa', 'tr': 'iki'
+      },
+      'three': {
+        'es': 'tres', 'fr': 'trois', 'de': 'drei', 'it': 'tre', 'pt': 'três',
+        'ru': 'три', 'zh': '三', 'ja': '三', 'ko': '셋', 'ar': 'ثلاثة',
+        'hi': 'तीन', 'nl': 'drie', 'pl': 'trzy', 'tr': 'üç'
+      },
+      
+      // Common words
+      'water': {
+        'es': 'agua', 'fr': 'eau', 'de': 'Wasser', 'it': 'acqua', 'pt': 'água',
+        'ru': 'вода', 'zh': '水', 'ja': '水', 'ko': '물', 'ar': 'ماء',
+        'hi': 'पानी', 'nl': 'water', 'pl': 'woda', 'tr': 'su'
+      },
+      'food': {
+        'es': 'comida', 'fr': 'nourriture', 'de': 'Essen', 'it': 'cibo', 'pt': 'comida',
+        'ru': 'еда', 'zh': '食物', 'ja': '食べ物', 'ko': '음식', 'ar': 'طعام',
+        'hi': 'खाना', 'nl': 'eten', 'pl': 'jedzenie', 'tr': 'yemek'
+      },
+      'help': {
+        'es': 'ayuda', 'fr': 'aide', 'de': 'Hilfe', 'it': 'aiuto', 'pt': 'ajuda',
+        'ru': 'помощь', 'zh': '帮助', 'ja': '助けて', 'ko': '도움', 'ar': 'مساعدة',
+        'hi': 'मदद', 'nl': 'help', 'pl': 'pomoc', 'tr': 'yardım'
+      },
+      'love': {
+        'es': 'amor', 'fr': 'amour', 'de': 'Liebe', 'it': 'amore', 'pt': 'amor',
+        'ru': 'любовь', 'zh': '爱', 'ja': '愛', 'ko': '사랑', 'ar': 'حب',
+        'hi': 'प्यार', 'nl': 'liefde', 'pl': 'miłość', 'tr': 'aşk'
+      },
+      'friend': {
+        'es': 'amigo', 'fr': 'ami', 'de': 'Freund', 'it': 'amico', 'pt': 'amigo',
+        'ru': 'друг', 'zh': '朋友', 'ja': '友達', 'ko': '친구', 'ar': 'صديق',
+        'hi': 'दोस्त', 'nl': 'vriend', 'pl': 'przyjaciel', 'tr': 'arkadaş'
       }
-
-      const data = await response.json()
-      return data.responseData?.translatedText || text
-    } catch (error) {
-      console.error('MyMemory translation error:', error)
-      return text // Return original text if translation fails
     }
+
+    const lowerText = text.toLowerCase().trim()
+    
+    // Try exact match first
+    if (dictionary[lowerText] && dictionary[lowerText][targetLanguage]) {
+      return dictionary[lowerText][targetLanguage]
+    }
+    
+    // Try to find partial matches
+    for (const [phrase, translations] of Object.entries(dictionary)) {
+      if (lowerText.includes(phrase) && translations[targetLanguage]) {
+        const translated = lowerText.replace(phrase, translations[targetLanguage])
+        return translated
+      }
+    }
+    
+    // Word-by-word translation attempt
+    const words = lowerText.split(' ')
+    const translatedWords = words.map(word => {
+      if (dictionary[word] && dictionary[word][targetLanguage]) {
+        return dictionary[word][targetLanguage]
+      }
+      return word
+    })
+    
+    const result = translatedWords.join(' ')
+    
+    // If no translation was made, return with language indicator
+    if (result === lowerText) {
+      return `[${sourceLanguage}→${targetLanguage}] ${text}`
+    }
+    
+    return result
   }
 
   private getLanguageCode(code: string): string {
@@ -203,16 +300,6 @@ export class TranslationService {
       lo: 'lo-LA'
     }
     return languageMap[code] || code
-  }
-
-  private getLibreTranslateCode(code: string): string {
-    // LibreTranslate uses different language codes
-    const codeMap: Record<string, string> = {
-      zh: 'zh',
-      he: 'he',
-      no: 'no'
-    }
-    return codeMap[code] || code
   }
 
   isSupported(): boolean {

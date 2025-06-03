@@ -29,14 +29,33 @@ function App() {
     setIsBrowserSupported(translationService.isSupported())
     
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
+      // Cleanup on unmount
+      cleanupAudioResources()
     }
   }, [])
+
+  const cleanupAudioResources = () => {
+    // Cancel animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    
+    // Close audio context only if it's not already closed
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+    
+    // Stop all tracks in the stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    
+    // Clear analyser reference
+    analyserRef.current = null
+  }
 
   const startRecording = async () => {
     if (!isBrowserSupported) {
@@ -88,6 +107,7 @@ function App() {
     } catch (err) {
       setError('Failed to access microphone. Please ensure you have granted permission.')
       console.error('Error accessing microphone:', err)
+      cleanupAudioResources()
     }
   }
 
@@ -101,28 +121,25 @@ function App() {
         processTranscript(pendingTranscriptRef.current)
       }
       
-      // Clean up
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
+      // Clean up audio resources
+      cleanupAudioResources()
       
       setIsRecording(false)
       setAudioLevel(0)
       setCurrentTranscript('')
-      
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
     }
   }
 
   const visualizeAudio = () => {
-    if (!analyserRef.current) return
+    if (!analyserRef.current || !audioContextRef.current) return
     
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount)
     
     const animate = () => {
-      if (!analyserRef.current) return
+      // Check if we should continue animating
+      if (!analyserRef.current || !isRecording || audioContextRef.current?.state === 'closed') {
+        return
+      }
       
       analyserRef.current.getByteFrequencyData(dataArray)
       const average = dataArray.reduce((a, b) => a + b) / dataArray.length
@@ -227,7 +244,7 @@ function App() {
             </h1>
           </div>
           <p className="text-purple-200 text-lg max-w-2xl mx-auto">
-            Record, transcribe, and translate speech in real-time using free APIs
+            Record, transcribe, and translate speech in real-time - 100% free!
           </p>
           
           {/* Browser Support Status */}
@@ -332,11 +349,12 @@ function App() {
               <div className="flex items-start gap-2">
                 <Info className="w-5 h-5 text-blue-400 mt-0.5" />
                 <div className="text-sm text-blue-200">
-                  <p className="font-medium mb-1">Free APIs Used:</p>
+                  <p className="font-medium mb-1">How it works:</p>
                   <ul className="text-xs space-y-1">
-                    <li>• Browser Speech Recognition (built-in)</li>
-                    <li>• LibreTranslate / MyMemory for translations</li>
-                    <li>• No API keys required!</li>
+                    <li>• Speech Recognition: Browser's built-in API</li>
+                    <li>• Translation: Client-side dictionary (no API needed)</li>
+                    <li>• Common phrases and words supported</li>
+                    <li>• 100% free, works offline!</li>
                   </ul>
                 </div>
               </div>
@@ -403,8 +421,8 @@ function App() {
             <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Globe className="w-6 h-6 text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Free Translation</h3>
-            <p className="text-purple-200 text-sm">LibreTranslate & MyMemory APIs - 100% free</p>
+            <h3 className="text-lg font-semibold text-white mb-2">Offline Translation</h3>
+            <p className="text-purple-200 text-sm">Dictionary-based translation - works offline!</p>
           </div>
         </div>
       </div>
