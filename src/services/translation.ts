@@ -76,9 +76,34 @@ export class TranslationService {
       return text
     }
 
-    // Use enhanced dictionary-based translation
-    return this.enhancedDictionaryTranslate(text, sourceLanguage, targetLanguage)
+ // Use Lingvanex API for translation
+    return this.lingvanexTranslate(text, sourceLanguage, targetLanguage)
   }
+
+  private async lingvanexTranslate(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
+    const url = 'https://translate-api.lingvanex.com/translate';
+    const params = new URLSearchParams({
+      from: sourceLanguage,
+      to: targetLanguage,
+      text: text
+    });
+
+    const response = await fetch(`${url}?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.lingvanexApiKey}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Translation failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.translation || `[${sourceLanguage}→${targetLanguage}] ${text}`;
+  }
+
+
 
   private enhancedDictionaryTranslate(text: string, sourceLanguage: string, targetLanguage: string): string {
     // Expanded dictionary with more phrases and words
