@@ -1,12 +1,13 @@
 import { TranscriptionSegment } from '../types'
 
 export class TranslationService {
-  // Using Web Speech API for speech recognition (browser built-in)
   private recognition: SpeechRecognition | null = null
   private isListening = false
 
+  // Replace with your actual Lingvanex API key
+  private lingvanexApiKey: string = 'a_FvBmQ2sCBjlG0VqZVBGa6mCzsCpbS7ZVgY1upKTB5702hQx4Kt0WABkFxdTwN96xiwj4TkKrbioHWEsi'
+
   constructor() {
-    // Check if Web Speech API is available
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition()
@@ -17,7 +18,7 @@ export class TranslationService {
   }
 
   async startListening(
-    language: string, 
+    language: string,
     onResult: (text: string, isFinal: boolean) => void,
     onError: (error: string) => void
   ): Promise<void> {
@@ -33,22 +34,17 @@ export class TranslationService {
       const last = event.results.length - 1
       const transcript = event.results[last][0].transcript
       const isFinal = event.results[last].isFinal
-
       onResult(transcript, isFinal)
     }
 
     this.recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error)
-      if (event.error === 'no-speech') {
-        // Ignore no-speech errors as they're common
-        return
-      }
+      if (event.error === 'no-speech') return
       onError(`Speech recognition error: ${event.error}`)
     }
 
     this.recognition.onend = () => {
       if (this.isListening) {
-        // Restart recognition if it stopped unexpectedly
         try {
           this.recognition?.start()
         } catch (e) {
@@ -76,36 +72,73 @@ export class TranslationService {
       return text
     }
 
- // Use Lingvanex API for translation
+    // First try dictionary-based translation
+    const dictionaryTranslation = this.enhancedDictionaryTranslate(text, sourceLanguage, targetLanguage)
+    if (!dictionaryTranslation.startsWith('[')) {
+      return dictionaryTranslation
+    }
+
+    // Fallback to API-based translation
     return this.lingvanexTranslate(text, sourceLanguage, targetLanguage)
   }
 
-  private async lingvanexTranslate(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
-    const url = 'https://translate-api.lingvanex.com/translate';
-    const params = new URLSearchParams({
+  // private async lingvanexTranslate(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
+  //   const url = 'https://translate-api.lingvanex.com/translate'
+  //   const params = new URLSearchParams({
+  //     from: sourceLanguage,
+  //     to: targetLanguage,
+  //     text: text
+  //   })
+
+  //   const response = await fetch(`${url}?${params.toString()}`, {
+  //     method: 'GET',
+  //     headers: {
+  //       'Authorization': `Bearer ${this.lingvanexApiKey}`
+  //     }
+  //   })
+
+  //   if (!response.ok) {
+  //     throw new Error(`Translation failed: ${response.statusText}`)
+  //   }
+
+  //   const data = await response.json()
+  //   return data.translation || `[${sourceLanguage}→${targetLanguage}] ${text}`
+  // }
+
+	private async lingvanexTranslate(text: string, sourceLanguage: string, targetLanguage: string): Promise<string> {
+  const url = 'https://api-b2b.backenster.com/b1/api/v3/translate';
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.lingvanexApiKey}`
+    },
+    body: JSON.stringify({
       from: sourceLanguage,
       to: targetLanguage,
-      text: text
-    });
+      data: text,
+      platform: 'api' // required by Lingvanex
+    })
+  });
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.lingvanexApiKey}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Translation failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.translation || `[${sourceLanguage}→${targetLanguage}] ${text}`;
+  if (!response.ok) {
+    throw new Error(`Translation failed: ${response.statusText}`);
   }
 
+  const data = await response.json();
 
+  if (!data.result) {
+    throw new Error('Invalid response from translation API.');
+  }
 
-  private enhancedDictionaryTranslate(text: string, sourceLanguage: string, targetLanguage: string): string {
+  return data.result;
+}
+
+	
+  // ... (your enhancedDictionaryTranslate and getLanguageCode implementations remain unchanged)
+  // Paste your existing `enhancedDictionaryTranslate()` here
+	  private enhancedDictionaryTranslate(text: string, sourceLanguage: string, targetLanguage: string): string {
     // Expanded dictionary with more phrases and words
     const dictionary: Record<string, Record<string, string>> = {
       // Greetings
@@ -268,8 +301,9 @@ export class TranslationService {
     
     return result
   }
-
-  private getLanguageCode(code: string): string {
+	
+  // Paste your existing `getLanguageCode()` here
+	  private getLanguageCode(code: string): string {
     // Map to Web Speech API language codes
     const languageMap: Record<string, string> = {
       en: 'en-US',
@@ -332,7 +366,6 @@ export class TranslationService {
   }
 
   getSupportedLanguages(): string[] {
-    // Languages well-supported by Web Speech API
     return ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi', 'nl', 'pl', 'tr']
   }
 }
